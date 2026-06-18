@@ -18,7 +18,7 @@ Built in two versions: a single-threaded one for learning and a multi-threaded o
 - Prints a full traffic report with per-app breakdown
 
 ---
-Tech Stack
+**#TECH STACK**
 
 CategoryTechnologyLanguageC++17Concurrencystd::thread, std::mutex, std::atomic, std::condition_variableData Structuresstd::unordered_map, std::queue, std::optional, std::vectorNetworkingRaw PCAP binary parsing (no libpcap dependency)Protocol SupportEthernet, IPv4, TCP, UDP, TLS 1.2/1.3, HTTP, DNSBuild SystemCMake 3.16+ / manual g++Test DataPython 3 (generate_test_pcap.py)PlatformLinux / macOS
 
