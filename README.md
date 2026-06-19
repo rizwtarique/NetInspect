@@ -1,45 +1,42 @@
 # NetInspect — Deep Packet Inspection Engine
 
-A C++17 network traffic analyzer that inspects, classifies, and filters packets by reading PCAP capture files. It identifies applications (YouTube, Netflix, TikTok, etc.) even in HTTPS traffic by extracting the SNI field from TLS handshakes — and can block traffic based on rules you define.
+A C++17 network traffic analyzer that inspects, classifies, and filters packets from PCAP capture files. It identifies applications (YouTube, Netflix, TikTok, and more) even inside encrypted HTTPS traffic by extracting the **SNI** field from TLS handshakes, and can block traffic in real time based on rules you define.
 
-Built in two versions: a single-threaded one for learning and a multi-threaded one for processing large captures fast.
+Available in two versions: a single-threaded build for learning the internals, and a multi-threaded build for processing large captures fast.
 
 ---
 
-## What it does
+## What It Does
 
 - Reads `.pcap` files (from Wireshark or tcpdump)
 - Parses Ethernet → IP → TCP/UDP headers layer by layer
 - Extracts **SNI** (Server Name Indication) from TLS Client Hello packets
 - Classifies traffic into 20+ applications (Google, Facebook, YouTube, Netflix, Discord, Zoom, etc.)
-- Tracks **flows** using the 5-tuple (src IP, dst IP, src port, dst port, protocol)
-- Blocks traffic by IP, app name, or domain keyword
-- Writes filtered packets to an output PCAP
-- Prints a full traffic report with per-app breakdown
-
----
-**##TECH STACK**
-
-CategoryTechnologyLanguage
-C++17Concurrencystd::thread,
-std::mutex,
-std::atomic,
-std::condition_variableData Structuresstd::unordered_map,
-std::queue, 
-std::optional, 
-std::vectorNetworkingRaw PCAP binary parsing (no libpcap dependency)Protocol SupportEthernet,
-IPv4,
-TCP,
-UDP,
-TLS 1.2/1.3,
-HTTP,
-DNSBuild SystemCMake 3.16+ / manual g++Test DataPython 3 (generate_test_pcap.py)PlatformLinux / macOS
+- Tracks **flows** using the 5-tuple (source IP, destination IP, source port, destination port, protocol)
+- Blocks traffic by IP address, app name, or domain keyword
+- Writes filtered packets to an output PCAP file
+- Prints a full traffic report with a per-app breakdown
 
 ---
 
-## Why SNI works on HTTPS
+## Tech Stack
 
-HTTPS encrypts the content, but the domain name is sent in plaintext during the TLS handshake (in the Client Hello message). This is called **Server Name Indication (SNI)**, and it's what lets the server know which certificate to use. NetInspect reads this field before any encryption kicks in.
+| Category | Technology |
+|---|---|
+| **Language** | C++17 |
+| **Concurrency** | `std::thread`, `std::mutex`, `std::atomic`, `std::condition_variable` |
+| **Data Structures** | `std::unordered_map`, `std::queue`, `std::optional`, `std::vector` |
+| **Networking** | Raw PCAP binary parsing (no `libpcap` dependency) |
+| **Protocol Support** | Ethernet, IPv4, TCP, UDP, TLS 1.2/1.3, HTTP, DNS |
+| **Build System** | CMake 3.16+ / manual `g++` |
+| **Test Data** | Python 3 (`generate_test_pcap.py`) |
+| **Platform** | Linux / macOS |
+
+---
+
+## Why SNI Works on HTTPS
+
+HTTPS encrypts the content of a connection, but the domain name is still sent in plaintext during the TLS handshake, inside the Client Hello message. This is called **Server Name Indication (SNI)**, and it's how the server knows which certificate to present. NetInspect reads this field before any encryption kicks in.
 
 ```
 TLS Client Hello (plaintext):
@@ -53,7 +50,7 @@ TLS Client Hello (plaintext):
 ## Project Structure
 
 ```
-NetInspect-main/
+NetInspect/
 ├── include/
 │   ├── types.h               # FiveTuple, AppType, Connection structs
 │   ├── pcap_reader.h         # PCAP file I/O
@@ -90,6 +87,7 @@ NetInspect-main/
 No external libraries needed — just a C++17 compiler.
 
 **Single-threaded version:**
+
 ```bash
 g++ -std=c++17 -O2 -I include -o dpi_simple \
     src/main_working.cpp \
@@ -100,6 +98,7 @@ g++ -std=c++17 -O2 -I include -o dpi_simple \
 ```
 
 **Multi-threaded version:**
+
 ```bash
 g++ -std=c++17 -pthread -O2 -I include -o dpi_engine \
     src/dpi_mt.cpp \
@@ -110,6 +109,7 @@ g++ -std=c++17 -pthread -O2 -I include -o dpi_engine \
 ```
 
 **Or using CMake:**
+
 ```bash
 mkdir build && cd build
 cmake ..
@@ -121,11 +121,13 @@ make
 ## Running
 
 **Basic usage:**
+
 ```bash
 ./dpi_engine test_dpi.pcap output.pcap
 ```
 
 **With blocking rules:**
+
 ```bash
 ./dpi_engine test_dpi.pcap output.pcap \
     --block-app YouTube \
@@ -135,12 +137,14 @@ make
 ```
 
 **Configure thread count (multi-threaded only):**
+
 ```bash
 ./dpi_engine input.pcap output.pcap --lbs 4 --fps 4
 # 4 Load Balancer threads × 4 Fast Path threads = 16 processing threads
 ```
 
 **Generate test data:**
+
 ```bash
 python3 generate_test_pcap.py
 ```
@@ -149,7 +153,7 @@ python3 generate_test_pcap.py
 
 ## Multi-threaded Architecture
 
-The MT version uses a **Reader → Load Balancer → Fast Path** pipeline:
+The multi-threaded version uses a **Reader → Load Balancer → Fast Path** pipeline:
 
 ```
 ┌────────────┐     ┌──────────────────────────────────┐     ┌────────────┐
@@ -161,12 +165,12 @@ The MT version uses a **Reader → Load Balancer → Fast Path** pipeline:
 └────────────┘     └──────────────────────────────────┘
 ```
 
-- **Reader** reads packets from PCAP and dispatches them to LB queues
-- **Load Balancers** hash the 5-tuple and route packets to the correct FP thread (same flow → same FP thread, always)
-- **Fast Path threads** do the actual DPI: SNI extraction, rule checking, forward/drop decision
+- **Reader** reads packets from the PCAP file and dispatches them to LB queues
+- **Load Balancers** hash the 5-tuple and route packets to the correct FP thread (same flow always lands on the same FP thread)
+- **Fast Path threads** perform the actual DPI work: SNI extraction, rule checking, forward/drop decision
 - All inter-thread communication uses a **thread-safe queue with backpressure** (`TSQueue`)
 
-Flow consistency is important — packets from the same TCP connection must always go to the same FP thread, otherwise the connection state tracking breaks.
+Flow consistency matters here — packets from the same TCP connection must always be routed to the same FP thread, otherwise connection state tracking breaks.
 
 ---
 
@@ -175,7 +179,7 @@ Flow consistency is important — packets from the same TCP connection must alwa
 Detected via SNI domain matching:
 
 | App | App | App | App |
-|-----|-----|-----|-----|
+|---|---|---|---|
 | YouTube | Netflix | Spotify | Zoom |
 | Facebook | Instagram | WhatsApp | Discord |
 | Google | Microsoft | Apple | GitHub |
@@ -232,9 +236,10 @@ Packet 3 (Client Hello) → SNI: www.youtube.com → BLOCKED
 Packet 4, 5, 6, ...     → flow is marked BLOCKED → DROP all
 ```
 
-Once a flow is blocked, every subsequent packet matching that 5-tuple gets dropped — the connection will time out on the client side.
+Once a flow is blocked, every subsequent packet matching that 5-tuple is dropped, and the connection eventually times out on the client side.
 
 Blocking priority:
+
 1. Source IP in blocklist → DROP
 2. App type in blocklist → DROP
 3. SNI contains blocked domain keyword → DROP
@@ -244,8 +249,8 @@ Blocking priority:
 
 ## Concepts Used
 
-- **PCAP format** — binary capture file format, 24-byte global header + per-packet headers
-- **5-tuple flow tracking** — `unordered_map<FiveTuple, Connection>` with custom hash
+- **PCAP format** — binary capture file format: 24-byte global header + per-packet headers
+- **5-tuple flow tracking** — `unordered_map<FiveTuple, Connection>` with a custom hash
 - **TLS SNI parsing** — manual byte-level parsing of the TLS Client Hello record
 - **Producer-Consumer pattern** — thread-safe queues between Reader, LB, and FP threads
 - **Atomic stats** — `std::atomic<uint64_t>` for lock-free per-thread statistics
@@ -256,7 +261,7 @@ Blocking priority:
 ## Requirements
 
 - Linux or macOS
-- g++ or clang++ with C++17 support
+- `g++` or `clang++` with C++17 support
 - Python 3 (only for generating test data)
 - No external libraries
 
@@ -270,3 +275,9 @@ Blocking priority:
 - Live stats dashboard using a background thread
 - Extend app signatures (Twitch, Reddit, LinkedIn, etc.)
 - Export report as JSON or CSV
+
+---
+
+## License
+
+No license specified yet — consider adding one (MIT is a common choice for projects like this) if you plan to share or accept contributions.
