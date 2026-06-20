@@ -1,6 +1,6 @@
 # NetInspect — Deep Packet Inspection Engine
 
-A C++17 network traffic analyzer that inspects, classifies, and filters packets from PCAP capture files. It identifies applications (YouTube, Netflix, TikTok, and more) even inside encrypted HTTPS traffic by extracting the **SNI** field from TLS handshakes, and can block traffic in real time based on rules you define.
+A C++17 network traffic ( packets) analyzer that inspects, classifies, and filters packets from PCAP capture files. It identifies applications (YouTube, Netflix, TikTok, and more) even inside encrypted HTTPS traffic by extracting the **SNI** field from TLS handshakes, and can block traffic in real time based on rules you define.
 
 Available in two versions: a single-threaded build for learning the internals, and a multi-threaded build for processing large captures fast.
 
